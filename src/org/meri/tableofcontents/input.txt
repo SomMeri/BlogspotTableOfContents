@@ -1,0 +1,422 @@
+<style>div.blogger-clickTrap {display: none;}</style><style type="text/css">
+div.answertext {
+  border-width: .2em;
+  border-style: solid;
+  border-color: #C7BB9D; 
+  padding-left:25px;
+  padding-right:25px;
+}
+div.answer {
+  border-style: none;
+  margin-bottom:25px;
+}
+div.question {
+}
+</style><div style="text-align: justify;">
+Rules add special handling around tests, test cases or test suites. They can do additional validations common for all tests in the class, concurrently run multiple test instances, set up resources before each test or test case and tear them down afterwards. 
+
+The rule gets complete control over what will done with the test method, test case or test suite it is applied to. Complete control means that the rule decides what to do before and after running it and how to deal with thrown exceptions.
+
+First chapter shows how to use rules and second shows what build-in rules can do. The third chapter describes third party rules libraries I found and the last one explains how to create new rules.
+
+<h4>
+Using Rules</h4>
+This chapter shows how to declare and use rules inside a test case. Most rules can be applied to each test method separately, once to the whole test case or once to the whole test suite. Rules run separately for each test are called test rules and rules applied to the whole test case or suite are called class rules. 
+
+We will use temporary folder rule as an example, so first subchapter explains what it does. Second subchapter declares it as test rule and third one as class rule. Last subchapter shows how to access the folder from inside the tests.
+
+<h5>
+Example Rule - Temporary Folder</h5>
+Temporary folder rule creates new empty folder, runs test or test case and then deletes the folder. You can either specify where to create the new folder, or let it be created in system temporary file directory. 
+
+Temporary folder can be used as both test rule and class rule. 
+
+<h5>
+Declaring Test Rules</h5>
+Test rules e.g., rules that run for each test method separately, have to be declared in public field annotated with <code>@Rule</code> annotation.
+
+Declare test rule:
+<div style="text-align: left;">
+<pre class="brush:java">public class SomeTestCase {
+  @Rule
+  public TemporaryFolder folder = new TemporaryFolder();
+}
+</pre>
+</div>
+
+The above <code>folder</code> rule creates new folder before every test method and destroys it afterwards. All tests are able to use that directory, but they are not able to share files through it. Since we used constructor with no parameters, the folder will be created in system temporary file directory. 
+
+Test rule does its work before methods annotated with <code>@Before</code> and after those annotated with <code>@After</code>. Therefore, they will have access to temporary folder too. 
+
+<h5>
+Declaring Class Rules</h5>
+Class rules e.g., rules that run once for the whole test case or test suite, have to be declared in public <i>static</i> field and annotated with <code>@ClassRule</code> annotation.
+
+Declare test case rule:
+<div style="text-align: left;">
+<pre class="brush:java">public class SomeTestCase {
+  @ClassRule
+  public static TemporaryFolder folder = new TemporaryFolder();
+}
+</pre>
+</div>
+
+The above <code>folder</code> rule creates new folder before running the first test method and destroys it after the last one. All tests are able to use that directory and they are able to see files created be previously running tests.
+
+Class rules are run before anything inside that class. E.g. methods annotated with <code>@BeforeClass</code> or <code>@AfterClass</code> will have access to temporary folder too. The rule runs before and after them.
+
+<h5>
+Using Rules Inside Tests</h5>
+Rules are classes as any other and tests are free to call their public methods and use their public fields. Those calls are used to add test specific configuration to the rule or read data out of it. 
+
+For example, temporary folder can be accessed using <code>newFile</code>, <code>newFolder</code> or <code>getRoot</code> methods. First two create new file or folder inside the temporary folder and the <code>getRoot</code> method returns temporary folder itself.
+
+Create temporary file and folder:
+<div style="text-align: left;">
+<pre class="brush:java">@Test
+public void test1() {
+  // Create new folder inside temporary directory. Depending on how you 
+  // declared the folder rule, the directory will be deleted either 
+  // right after this test or when the last test in test case finishes.
+  File file = folder.newFolder("folder");
+}
+
+@Test
+public void test2() {
+  // Create new file inside temporary folder. Depending on how you 
+  // declared the folder rule, the file will be deleted either 
+  // right after this test or when the last test in test case finishes.
+  File file = folder.newFile("file.png");
+}
+</pre>
+</div>
+
+<h4>
+Default Rules</h4>
+JUnit comes with five <a href="https://github.com/junit-team/junit/wiki/Rules">directly useable rules</a>: temporary folder, expected exception, timeout, error collector and test name. Temporary folder have been explained in previous chapter, so we will briefly explain only remaining four rules.
+
+<h6>
+Expected Exception</h6>
+Expected exception runs the test and catches any exception it throws. The rule is able to check whether the exception contains the right message, the right cause and whether it was thrown by the right line. 
+
+Expected exception has private constructor and must be initialized using static <code>none</code> method. Each exception throwing test has to configure expected exception parameters and then call the <code>expect</code> method of the rule. The rule fails if:<ul>
+<li>the test throws any exception before the <code>expect</code> method call,</li>
+<li>the test does not throw an exception after the <code>expect</code> method call,</li>
+<li>thrown exception does not have the right message, class or cause.</li>
+</ul>
+
+The last test line throws an exception. Expected exception rule is configured right before causing the exception:
+<div style="text-align: left;">
+<pre class="brush:java">@Rule
+public ExpectedException thrown= ExpectedException.none();
+
+@Test
+public void testException() {
+  // Any exception thrown here causes failure
+  doTheStuff();
+  // From now on, the rule expects NullPointerException exception
+  // to be thrown. If the test finishes without exception or if it 
+  // throws wrong one, the rule will fail.
+  thrown.expect(NullPointerException.class);
+  // We well check also message
+  thrown.expectMessage("Expected Message.");
+
+  // this line is supposed to throw exception
+  theCodeThatThrowsTheException();
+}
+</pre>
+</div>
+
+Bonus: the expected message method accepts also <a href="https://code.google.com/p/hamcrest/wiki/Tutorial">hamcrest</a> matcher argument. That allows you to test the message prefix, suffix, whether it matches some regular expressions or anything else.
+
+<h6>
+Timeout</h6>
+The timeout rule can be used as both test rule and class rule. If it is declared as test rule, it applies the same timeout limit to each test in the class. If it is declared as class rule, it applies the timeout limit to the whole test case or test suite. 
+
+<h6>
+Error Collector</h6>
+Error collector allows you to run multiple checks inside the test and then report all their failures at once after the test ends. 
+
+Expected-vs-actual value assertions are evaluated using the <code>checkThat</code> method exposed by the rule. It accepts <a href="https://code.google.com/p/hamcrest/wiki/Tutorial">hamcrest</a> matcher as an argument and thus can be used to check anything. 
+
+Unexpected exceptions can be reported directly using <code>addError(Throwable error)</code> method. Alternatively, if you have an instance of <code>Callable</code> to be run, you can call it through <code>checkSucceeds</code> method which adds any thrown exception into errors list.
+
+<h6>
+Test Name</h6>
+Test name rule exposes test name inside the test. It might be useful when you need to create custom error reporting.
+
+<h4>
+Third Party Rules Libraries</h4>
+Rules are decoupled from the test class, so it is easy to write libraries of general purpose rules and share them between projects. This chapter describes three such libraries.
+
+<a href="http://stefanbirkner.github.io/system-rules/">System rules</a> is rules collection for testing code that uses java.lang.System. It is well documented, available in maven and released under Common Public License 1.0 (the same as jUnit). System rules allows you to easily:
+<ul>
+<li>test content of <code>System.err</code> and <code>System.out</code>,</li>
+<li>simulate input in <code>System.in</code>,</li>
+<li>configure system properties and revert their values back,</li>
+<li>test <code>System.exit()</code> calls - whether it was called and what return value was,</li>
+<li>customize java <code>SecurityManager</code> and revert it back.</li>
+</ul>
+
+A <a href="https://github.com/aisrael/junit-rules">big set</a> of useful rules is available on aisrael account on github. Its <a href="https://github.com/aisrael/junit-rules/wiki">documentation</a> is somewhat limited, but you can always <a href="https://github.com/aisrael/junit-rules/tree/master/src/main/java/junit/rules">look at the code</a>. All rules are released under MIT license:
+<ul>
+<li>starting and stopping in-memory <a href="https://github.com/aisrael/junit-rules/blob/9a20f5b245c3f4e346ea01d571481318b59a19a4/src/main/java/junit/rules/derby/DerbyDataSourceRule.java">derby database</a>,</li>
+<li>starting and stopping default java <a href="https://github.com/aisrael/junit-rules/blob/9a20f5b245c3f4e346ea01d571481318b59a19a4/src/main/java/junit/rules/httpserver/HttpServerRule.java">HttpServer</a>,</li>
+<li>starting and stopping <a href="https://github.com/aisrael/junit-rules/blob/9a20f5b245c3f4e346ea01d571481318b59a19a4/src/main/java/junit/rules/jetty/JettyServerRule.java">Jetty</a> server,</li>
+<li>running <a href="https://github.com/aisrael/junit-rules/blob/9a20f5b245c3f4e346ea01d571481318b59a19a4/src/main/java/junit/rules/jndi/StubJndiContext.java">stub jndi</a>,</li>
+<li>some support for <a href="https://github.com/aisrael/junit-rules/tree/master/src/main/java/junit/rules/dbunit">dbUnit</a> tests.</li>
+</ul>
+
+Another undocumented set of rules <a href="https://github.com/msetkowski/rules">on github</a>. I will not list them here, because their names are self-explanatory and they do not have specified license. Look at the rules <a href="https://github.com/msetkowski/rules/tree/master/src/main/java/org/wowbagger/rules">directory</a> to see their list.
+
+<h4>
+Custom Rule</h4>
+This chapter shows how to create new rules. They can be implemented from scratch by implementing the <code>TestRule</code> interface or by extending one of two convenience classes <code>ExternalResource</code> and <code>Verifier</code> available in jUnit.
+
+We will create a new rule from scratch and then rewrite it using <code>ExternalResource</code> class.
+
+<h5>
+New Rule</h5>
+New rule ensures that all files created by tests are properly deleted after each test finishes its work. The tests themselves have only one responsibility: report all new files using the <code>ensureRemoval(file)</code> method exposed by the rule.
+
+How to declare and use the <code>DeleteFilesRule</code> rule:
+<div style="text-align: left;">
+<pre class="brush:java">@Rule
+public DeleteFilesRule toDelete = new DeleteFilesRule();
+
+@Test
+public void example() throws IOException {
+  // output.css will be deleted whether the test passes, fails or throws an exception
+  toDelete.ensureRemoval("output.css");
+  // the compiler is configured to create output.css file
+  compileFile("input.less");
+  checkCorrectess("output.css");
+}
+</pre>
+</div>
+
+<h5>
+From Scratch</h5>
+Each rule, including class rules, must implement the <code>@TestRule</code> interface. The interface has exactly one method:
+<div style="text-align: left;">
+<pre class="brush:java">public interface TestRule {
+  Statement apply(Statement base, Description description);
+}
+</pre>
+</div>
+
+Our job is to take statement supplied in the <code>base</code> parameter and turn it into another statement. The statement represents a set of actions e.g., test, test case or test suite to be run. It might have already been modified by other declared rules and includes before and after test or class methods.
+
+The second <code>description</code> parameter describes the input statement. It can tell test class name, test name, annotations placed on it, it knows whether we are dealing with test or test suite etc. We will not need it.
+
+Therefore, we need to create a new statement which will do three things:<ul>
+<li>Empty the list of files to be deleted.</li>
+<li>Run underlying test, test case or test suite represented by the <code>base</code> parameter.</li>
+<li>Delete all files reported by tests inside previously run statement.</li>
+</ul>
+
+The statement is a class with one abstract method:
+<div style="text-align: left;">
+<pre class="brush:java">public abstract class Statement {
+  public abstract void evaluate() throws Throwable;
+}
+</pre>
+</div>
+
+Since underlying statement can throw an exception, the code to delete all files must run from finally block:
+<div style="text-align: left;">
+<pre class="brush:java">public class DeleteFilesRule implements TestRule  {
+  
+  public Statement apply(final Statement base, final Description description) {
+    return new Statement() {
+      
+      @Override
+      public void evaluate() throws Throwable {
+        emptyFilesList(); // clean the list of files
+        try {
+          base.evaluate(); // run underlying statement
+        } finally {
+          removeAll(); // delete all new files
+        }
+      }
+    };
+  }
+}
+</pre>
+</div>
+
+Both referenced methods <code>emptyFilesList</code> and <code>removeAll</code> are declared outside of new statement, directly inside the <code>DeleteFilesRule</code> class:
+<div style="text-align: left;">
+<pre class="brush:java">public class DeleteFilesRule implements TestRule  {
+
+  private List&lt;File&gt; toDelete;
+  
+  private void emptyFilesList() {
+    toDelete = new ArrayList&lt;File&gt;();
+  }
+
+  private void removeAll() {
+    for (File file : toDelete) {
+      if (file.exists())
+        file.delete();
+    }
+  }
+
+  /* ... the apply method ... */
+}
+</pre>
+</div>
+
+The last thing we need is a public method able to add files to be deleted:
+<div style="text-align: left;">
+<pre class="brush:java">public void ensureRemoval(String... filenames) {
+  for (String filename : filenames) {
+    toDelete.add(new File(filename));
+  }
+}
+</pre>
+</div>
+
+<h6>
+Full Class</h6>
+<div class="answer">
+<a class="answertext" href="javascript:void()" onclick="toggleAnswer(this)">Click to expand</a>
+<div class="answertext" style="text-align: justify;">
+
+<div style="text-align: left;">
+<pre class="brush:java">public class DeleteFilesRule implements TestRule  {
+
+  private List&lt;File&gt; toDelete;
+  
+  public void ensureRemoval(String... filenames) {
+    for (String filename : filenames) {
+      toDelete.add(new File(filename));
+    }
+  }
+  private void emptyFilesList() {
+    toDelete = new ArrayList&lt;File&gt;();
+  }
+
+  private void removeAll() {
+    for (File file : toDelete) {
+      if (file.exists())
+        file.delete();
+    }
+  }
+
+  public Statement apply(final Statement base, final Description description) {
+    return new Statement() {
+      
+      @Override
+      public void evaluate() throws Throwable {
+        emptyFilesList(); // clean the list of files
+        try {
+          base.evaluate(); // run underlying statement
+        } finally {
+          removeAll(); // delete all new files
+        }
+      }
+    };
+  }
+}
+</pre>
+</div>
+
+</div>
+</div>
+<h5>
+Extending Build-in Classes</h5>
+JUnit contains two convenience classes <code>ExternalResource</code> and <code>Verifier</code> meant to simplify the above process even more. 
+
+<h6>
+External Resource</h6>
+The <code>ExternalResource</code> helps when you need to do some kind of preprocessing and postprocessing around the underlying test statement. If you need preprocessing, override the <code>before</code> method. If you need postprocessing, override the <code>after</code> method. The <code>after</code> is called from finally block, so it will be run no matter what.
+
+Our <code>DeleteFilesRule</code> could be rewritten like this:
+<div style="text-align: left;">
+<pre class="brush:java">public class DeleteFilesRule2 extends ExternalResource  {
+  
+  /* ... list, ensureRemoval and removeAll methods ... */
+
+  @Override
+  protected void before() throws Throwable {
+    toDelete = new ArrayList&lt;File&gt;();
+  }
+
+  @Override
+  protected void after() {
+    removeAll();
+  }
+
+}
+</pre>
+</div>
+
+<h6>
+Verifier</h6>
+The <code>Verifier</code> has only one method <code>verify</code> to override. That method runs after the wrapped test finished its work and only if it did not thrown an exception. As the name suggests, the verifier is good if you want to run additional checks after the test. 
+
+<h4>
+More About jUnit</h4>
+Previous post about jUnit 4 features:
+<ul>
+<li><a href="http://meri-stuff.blogspot.sk/2014/08/junit-dynamic-tests-generation.html">jUnit: Dynamic Tests Generation</a></li>
+</ul></div>
+
+<script type="text/javascript">
+ 
+function nextDiv(element) {
+  do {
+    element = element.nextSibling;
+  } while (element && element.nodeName != "DIV");
+  return element;                
+}
+
+function getElementsByClass(node, searchClass, tag) {
+  var classElements = new Array();
+  var els = node.getElementsByTagName(tag); // use "*" for all elements
+  var elsLen = els.length;
+  var pattern = new RegExp("\\b"+searchClass+"\\b");
+  for (i = 0, j = 0; i < elsLen; i++) {
+    if ( pattern.test(els[i].className) ) {
+      classElements[j] = els[i];
+      j++;
+    }
+  }
+  return classElements;
+}
+
+function expand(heading, answer) {
+  answer.style.display="block";
+  heading.innerHTML="[-] Click to Collapse"; 
+}
+
+function collapse(heading, answer) {
+  answer.style.display="none"; 
+  heading.innerHTML="[+] Click to Expand"; 
+}
+
+function toggleAnswer(heading) { 
+  answer=nextDiv(heading); 
+  if (answer.style.display=="none") { 
+    expand(heading, answer);
+  } else { 
+    collapse(heading, answer);
+  } 
+} 
+
+function expandAllAnswers() {
+  var headings = getElementsByClass(document, 'answertext', 'a');
+  for(i=0; i<headings.length; i++) {
+    expand(headings[i], nextDiv(headings[i]));
+  }
+}
+
+function collapseAllAnswers() {
+  var headings = getElementsByClass(document, 'answertext', 'a');
+  for(i=0; i<headings.length; i++)
+    collapse(headings[i], nextDiv(headings[i]));
+}
+
+window.onload = collapseAllAnswers; 
+</script>

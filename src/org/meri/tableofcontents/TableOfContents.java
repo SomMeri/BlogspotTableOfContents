@@ -5,9 +5,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 
 public class TableOfContents {
-  private static final String FILE = "src/org/meri/tableofcontents/JPA 16.txt";
-  private static final String CONTENT = "src/org/meri/tableofcontents/JPA 16 Links.txt";
-  private static final String TOC = "src/org/meri/tableofcontents/TOC 16.txt";
+  private static final String FILE = "src/org/meri/tableofcontents/input.txt";
+  private static final String CONTENT = "src/org/meri/tableofcontents/output-links.txt";
+  private static final String TOC = "src/org/meri/tableofcontents/TOC.txt";
   private static String resultContent = "";
   private static Header root = new Header();
 
